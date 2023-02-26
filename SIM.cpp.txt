@@ -1,0 +1,1018 @@
+/* On my honor, I have neither given nor received unauthorized aid on this assignment */
+
+/**
+ * @file SIM.cpp
+ * @author Sahan Sulochana Hettiarachchi (180237g@uom.lk)
+ * @brief  180237G
+ * @version 0.1
+ * @date 2022-09-29
+ * 
+ * @copyright Copyright (c) 2022
+ * 
+ */
+
+
+#include<iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <map>
+#include <math.h>
+#include <bitset>
+
+using std::cout;
+using std::endl;
+using std::vector;
+using std::string;
+using std::fstream;
+using std::ofstream;
+using std::ios;
+using std::map;
+using std::bitset;
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////  COMPRESSION FUNCTIONS   ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+/**
+ * @brief 
+ * input: vect => an empty list
+ * 
+ * function: Read text data line by line, and adding to the empty list(vect)
+ * 
+ */
+
+void getData(vector<string>& vect){
+
+    int num_lines = 0;
+
+    fstream originalFile;
+    originalFile.open("original.txt",ios::in); //open a file
+    if(originalFile.is_open()) { //checking whether the file is open
+        string line;
+        while(getline(originalFile, line)){
+            vect.push_back(line);
+            num_lines++;
+            
+        }
+        originalFile.close(); //close the file object.
+    }
+}
+
+
+
+
+/**
+ * @brief 
+ * input: v => string list
+ *        k => string that required index
+ * 
+ * function: Returning the particular index in list(v) for the string(k)
+ * 
+ */
+
+
+int getIndex(vector<string> v, string K)
+{
+    auto it = find(v.begin(), v.end(), K);
+  
+    // If element was found
+    if (it != v.end()) 
+    {
+      
+        // calculating the index
+        // of K
+        int index = it - v.begin();
+        return index;
+    }
+    return 0;
+}
+
+
+
+
+/**
+ * @brief 
+ * input: originalList        => 32bit binary data list
+ *        unOrderedDictList   => Unordered dictionary list 
+ *        orderedDictList     => copy of unordered dictionary list(This will be sorted at the end of function)
+ *        freqMap             => {"The entry": number of frequencies}
+ * 
+ * function: Giving the ordered eight entry dictionary as the orderedDictList
+ * 
+ */
+
+void createOrderedList(vector<string>& originalList, vector<string>& unOrderedDictList,vector<string>& orderedDictList,map<string,int> freqMap){
+
+    for(int i=0;i<originalList.size();i++){
+        int count = 1; //frequency of each 32bit value
+        string var = originalList[i];
+
+        if (freqMap.count(var)==0){
+            for(int j=0;j<originalList.size();j++){
+                if(i!=j){   
+                    if(var==originalList.at(j)){    //If same value exist
+                        count++;                    //Increment the count
+                    }
+                }
+            }
+            if(count>1){
+                    freqMap[var] = count;
+                    unOrderedDictList.push_back(var);
+                    orderedDictList.push_back(var);
+                }
+        }
+    }
+
+    string maxCount;
+    for(int i = 0;i < orderedDictList.size(); i++){
+        maxCount = orderedDictList.at(i);
+        for (int j = i+1; j<orderedDictList.size()-1;j++){
+            if(freqMap[maxCount]<freqMap[orderedDictList.at(j)]){
+                orderedDictList[i] = orderedDictList.at(j);
+                orderedDictList[j] = maxCount;
+                maxCount = orderedDictList.at(i);
+            }
+
+            else if(freqMap[maxCount]==freqMap[orderedDictList.at(j)]){
+                if(getIndex(unOrderedDictList,maxCount)>getIndex(unOrderedDictList,orderedDictList.at(j))){
+                    orderedDictList[i] = orderedDictList.at(j);
+                    orderedDictList[j] = maxCount;
+                }
+            }
+
+        }
+    }
+
+    //Removing additional entries(if there is case more than 8 entries)
+    while(orderedDictList.size()>8){
+        orderedDictList.pop_back();
+    }
+
+}
+
+
+
+
+/**
+ * @brief 
+ * input: string 1    => data list's string
+ *        string 2    => dictionary list's string
+ *        formatindex => 0: More than 4 mismatches
+ *                       1: One mismatch
+ *                       2: Two consecutive mismatch 
+ *                       3: Two mismatch (first Location = stringLocation1, second Location = stringLocation2)
+ *                       4: Four/three/two mismatch (4 bit mask)
+ * 
+ *        startingLocation1 => first missing bit Location (initially empty value)
+ *        startingLocation2 => second missing bit Location (initially empty value)
+ *        bitMask => 4 bit mask pattern (initially empty string)
+ * 
+ * function: Giving the format, bit mismatch location1(for formatIndex = 1,2,3,4), bit mismatch location2(for formatIndex = 3)
+ *           and bit mask pattern (for formatIndex = 4)
+ * 
+ */
+
+void stringCompare(string str1, string str2,int &formatIndex,int &startingLocation1,int &startingLocation2,string &bitMask){
+    int numberOfMissMatch = 0;
+
+    formatIndex = 0;            
+    startingLocation1 = 0;
+    startingLocation2 = 0;
+    bitMask = "";
+
+    int k = 0;
+    while(k<str1.size()){
+        if(k<str1.size()-3){                     //check consecutive 4 bits
+            bool check1 = (str1[k]!=str2[k]);
+            bool check2 = (str1[k+1]!=str2[k+1]);
+            bool check3 = (str1[k+2]!=str2[k+2]);
+            bool check4 = (str1[k+3]!=str2[k+3]);
+
+            if((check1==false)&&(check2==true)&&(check3==true)&&(check4==true)&&(k==str1.length()-4)){          //0111 (important in 29 bit)
+                //cout<<"0111"<<endl;
+                numberOfMissMatch += 3;
+                if(numberOfMissMatch>3){
+                    formatIndex = 0;
+                }
+                else{
+                    formatIndex = 4;
+                    startingLocation1 = str1.length()-4;
+                    bitMask = "0111";
+                }
+                
+                k += 4;      
+            }
+
+            else if((check1==false)&&(check2==true)&&(check3==false)&&(check4==true)&&(k==str1.length()-4)){    //0101 (important in 29 bit)
+                //cout<<"0101"<<endl;
+                numberOfMissMatch += 2;
+                if (numberOfMissMatch>2){
+                    formatIndex = 0;   
+                }
+                else{
+                    formatIndex = 4;         
+                    startingLocation1 = str1.length()-4;
+                    bitMask = "0101";
+                }
+                
+                k += 4;  
+            }
+
+            else if((check1==true)&&(check2==true)&&(check3==true)&&(check4==true)){      //1111
+                //cout<<1111<<endl;
+                numberOfMissMatch += 4;
+                if(numberOfMissMatch>4){
+                    formatIndex = 0;
+                }
+
+                else{
+                    formatIndex = 4;
+                    startingLocation1 = k;
+                    bitMask = "1111"; 
+                }
+                k += 4;
+            }
+
+            else if((check1==true)&&(check2==true)&&(check3==true)&&(check4==false)){    //1110
+                //cout<<1110<<endl;
+                numberOfMissMatch += 3;
+                if(numberOfMissMatch>3){
+                    formatIndex = 0;
+                }
+
+                else{
+                    formatIndex = 4;
+                    startingLocation1 = k;
+                    bitMask = "1110"; 
+                }
+                k += 4;
+            }
+
+            else if((check1==true)&&(check2==true)&&(check3==false)&&(check4==true)){    //1101
+                //cout<<1101<<endl;
+                numberOfMissMatch += 3;
+                if(numberOfMissMatch>3){
+                    formatIndex = 0;
+                }
+
+                else{
+                    formatIndex = 4;
+                    startingLocation1 = k;
+                    bitMask = "1101"; 
+                }
+                k += 4;
+            }
+
+            else if((check1==true)&&(check2==false)&&(check3==true)&&(check4==true)){    //1011
+                //cout<<1011<<endl;
+                numberOfMissMatch += 3;
+                if(numberOfMissMatch>3){
+                    formatIndex = 0;
+                }
+
+                else{
+                    formatIndex = 4;
+                    startingLocation1 = k;
+                    bitMask = "1011"; 
+                }
+                k += 4;
+            }
+
+            else if((check1==true)&&(check2==false)&&(check3==false)&&(check4==false)){   //1000
+                //cout<<1000<<endl;
+                numberOfMissMatch += 1;
+                if(numberOfMissMatch>2){
+                    formatIndex = 0;
+                }
+
+                else if(numberOfMissMatch==1){      //First meet due one mismatch
+                    formatIndex = 1;
+                    startingLocation1 = k;
+                }
+
+                else if(numberOfMissMatch==2){      //Second meet due two mismatches
+                    formatIndex = 3;
+                    startingLocation2 = k;
+                }
+                k += 4;
+            }
+
+            else if((check1==true)&&(check2==false)&&(check3==false)&&(check4==true)){   //1001
+                //cout<<1001<<endl;
+                numberOfMissMatch += 2;         
+                if(numberOfMissMatch>2){
+                    formatIndex = 0;
+                }
+
+                else {                              //better to have 4bit mask rather than using 2 mismatches
+                    formatIndex = 4;
+                    startingLocation1 = k;
+                    bitMask = "1001"; 
+                }
+                k += 4;   
+            }
+
+            else if((check1==true)&&(check2==false)&&(check3==true)&&(check4==false)){   //1010
+                //cout<<1010<<endl;
+                numberOfMissMatch += 2;         
+                if(numberOfMissMatch>2){
+                    formatIndex = 0;
+                }
+
+                else{
+                    formatIndex = 4;            //better to have 4bit mask rather than using 2 mismatches
+                    startingLocation1 = k;
+                    bitMask = "1010"; 
+                }
+                k += 4;
+            }
+
+            else if((check1==true)&&(check2==true)&&(check3==false)&&(check4==false)){   //1100
+                //cout<<1100<<endl;
+                numberOfMissMatch += 2;
+                if(numberOfMissMatch>2){
+                    formatIndex = 0;
+                }
+
+                else{
+                    formatIndex = 2;
+                    startingLocation1 = k;
+                }
+                k += 4;
+            }
+
+            else{
+                k++; //0110,0011,0000,0001
+            }
+
+
+
+        }
+
+        else if((k<str1.size()-1)&&(str1[k]!=str2[k])){
+            bool check5 = (str1[k]!=str2[k]);
+            bool check6 = (str1[k+1]!=str2[k+1]);
+
+            if((check5==true)&&(check6==true)){         //11
+                //cout<<11<<endl;
+                numberOfMissMatch += 2;
+                if(numberOfMissMatch>2){
+                    formatIndex = 0;
+                }
+
+                else{
+                    formatIndex = 2;
+                    startingLocation1 = k;
+                }
+                k += 2;
+                
+            }
+
+            else if((check5==true)&&(check6==false)){   //10
+                //cout<<10<<endl;
+                numberOfMissMatch += 1;
+                if(numberOfMissMatch>2){
+                    formatIndex = 0;
+                }
+
+                else if(numberOfMissMatch==1){
+                    formatIndex = 1;
+                    startingLocation1 = k;
+                }
+
+                else if(numberOfMissMatch==2){
+                    formatIndex = 3;
+                    startingLocation2 = k;
+                }
+                k += 2;
+            }
+
+        }
+
+        else{
+            if(str1[k]!=str2[k]){                   //1
+                //cout<<1<<endl;
+                numberOfMissMatch++;
+                if(numberOfMissMatch>2){
+                    formatIndex = 0;
+                }
+
+                else if(numberOfMissMatch==1){
+                    formatIndex = 1;
+                    startingLocation1 = k;
+                }
+
+                else if(numberOfMissMatch==2){
+                    formatIndex = 3;
+                    startingLocation2 = k;
+                }
+                k++;
+            }
+
+            else{
+                k++;
+            }
+        }
+    }
+
+    //cout<<"format: "<<formatIndex<<" start: "<<startingLocation1<<" end: "<<startingLocation2<<" mask: "<<bitMask<<endl;
+}
+
+
+
+
+
+/**
+ * @brief 
+ * input: dictionary => Dictionary list
+ *        datalist   => Data list
+ *        output     => generating string based on compression
+ * 
+ * function: saving the compressed values in 'output.text' file. (output text is limited to 32 bit)
+ * 
+ */
+void encoding(vector<string> &dictionary, vector<string> &datalist, string &output ){
+
+    int i = 0;
+    int j = 0;
+    output = "";
+
+    //creating output file
+    ofstream compressingFile;
+    compressingFile.open ("cout.txt");
+    int countRLE;
+    while(i<datalist.size()){
+
+        //Resetting before using for another 32bit pattern
+        int formatID = 0;
+        int startBitLocation = 0;
+        int endBitLocation = 0;
+        string bitMaskPattern = "";
+
+        //Four bit mask
+        int hasAttemptForBitMask = 0;       //Checking first attempt for 4 bit masked is occured
+        int saved4BitStart = 0;             //stating location of 4 bit masked(Sholud be saved in first attempt)
+        string saved4BitMask = "";          //4 bit masked(Sholud be saved in first attempt)
+        int dictionary4Bit = 0;             //Dictionary bit(Sholud be saved in first attempt)
+        
+        //Two bit anywhere
+        int hasAttemptForTwoBit  = 0;       //Checking first attempt for 2 bit anywhere format is occured
+        int saved2BitStart1 = 0;            //stating location1 (Sholud be saved in first attempt)
+        int saved2BitStart2 = 0;            //stating location2 (Sholud be saved in first attempt)
+        int dictionary2Bit = 0;             //Dictionary bit(Sholud be saved in first attempt)
+
+        while(j<dictionary.size()){
+            countRLE = 0;
+            //---------------------------------- |000|XX| (RLE format) ------------------------------------------------------//
+            //std::cout<<"i = "<<i<<" j = "<<j<<endl;
+            //std::cout<<dictionary[j]<<endl;
+            if((i>0)&&(datalist[i-1]==datalist[i])){
+                countRLE++;                                                  //datalist[i-1] = datalist[i]
+                for(int k=1;k<4;k++){
+                    if((i+k<datalist.size())&&(datalist[i]==datalist[i+k])){ //datalist[i] = datalist[i+1]
+                      countRLE++;                                            //datalist[i] = datalist[i+2]
+                    }                                                        //datalist[i] = datalist[i+3]
+                    else{
+                        break;
+                    }
+                }
+                output += "000";
+                string RLEbits = bitset<2>(countRLE-1).to_string();
+                output += RLEbits;
+                j=0;
+                i += (countRLE-1);
+                break;
+            }
+
+            //-------------------------------- |101|XXX|(Direct matching) ------------------------------------------------------//
+            else if(datalist[i]==dictionary[j]){
+                output += "101";
+                string DirectBits = bitset<3>(j).to_string();
+                output += DirectBits;
+                j=0;
+                break;
+            }
+            
+            else{
+                stringCompare(datalist[i],dictionary[j],formatID,startBitLocation,endBitLocation,bitMaskPattern);
+                //---------------------------- |010|XXXXX|XXX|(One bit mis) -----------------------------------------------------//
+                if(formatID==1){
+                    output += "010";
+                    string oneMisBit = bitset<5>(startBitLocation).to_string();
+                    string dictIndex = bitset<3>(j).to_string();
+                    output += oneMisBit + dictIndex;
+                    break;
+                }
+                //---------------------------- |011|XXXXX|XXX|(two bit mis-consecutive) -----------------------------------------//
+                else if(formatID==2){
+                    output += "011";
+                    string twoMisBit = bitset<5>(startBitLocation).to_string();
+                    string dictIndex = bitset<3>(j).to_string();
+                    output += twoMisBit + dictIndex;
+                    break;
+
+                }
+                //----------------------------- |011|XXXXX|XXX|(two bit mis-consecutive) ----------------------------------------//
+                else if(formatID==4){
+                    if(hasAttemptForBitMask==0){
+                        saved4BitStart = startBitLocation;
+                        saved4BitMask = bitMaskPattern;
+                        dictionary4Bit = j;
+                        hasAttemptForBitMask++;
+                    }
+                }
+
+                else if(formatID==3){
+                    if(hasAttemptForTwoBit==0){
+                        saved2BitStart1 = startBitLocation;
+                        saved2BitStart2 = endBitLocation;
+                        dictionary2Bit = j;
+                        hasAttemptForTwoBit++;
+                    }
+                }
+            }
+            //Final Destination
+            if(j==dictionary.size()-1){
+
+            //------------------------------- |001|XXXXX|XXXX|XXX|(4 bit mask) ------------------------------------//  
+                if(hasAttemptForBitMask==1){
+                    output += "001";
+                    string location = bitset<5>(saved4BitStart).to_string();
+                    string dictIndex = bitset<3>(dictionary4Bit).to_string();
+                    output += location + saved4BitMask + dictIndex;
+                    break;
+                }
+            //--------------------------------|001|XXXXX|XXXX|XXX|(4 bit mask) ------------------------------------//
+                else if(hasAttemptForTwoBit==1){
+                    output += "100";
+                    string location1 = bitset<5>(saved2BitStart1).to_string();
+                    string location2 = bitset<5>(saved2BitStart2).to_string();
+                    string dictIndex = bitset<3>(dictionary2Bit).to_string();
+                    output += location1 + location2 + dictIndex;
+                    break;
+                }
+            //-------------------------------- Original Binary(32 bit) -------------------------------------------// 
+
+                else{
+                    output += "110" + datalist[i];
+                }
+            }
+
+            j++;   
+        }
+ 
+        if(output.length()>32){
+            string cpystr = "";
+            for(int i=0;i<32;i++){
+                //cout<<output[i];
+                compressingFile<<output[i];
+            }
+            compressingFile<<"\n";
+            //cout<<"\n";
+            for(int j = 32; j<output.length();j++){
+                cpystr += output[j]; 
+            }
+
+            output = cpystr;
+        }
+
+        //Final line with the '1' pad
+        if(i==datalist.size()-1){
+            compressingFile<<output;
+            //cout<<output;
+            for(int m=output.length();m<32;m++){
+                compressingFile<<"1";
+                //cout<<"1";
+            }
+            compressingFile<<"\nxxxx\n";
+            //cout<<"\nxxxx\n";
+            for(int n=0;n<dictionary.size();n++){
+                if(n!=dictionary.size()-1){
+                    compressingFile<<dictionary.at(n)+"\n";
+                }
+                else{
+                    compressingFile<<dictionary.at(n);
+                }
+                
+                //cout<<dictionary.at(n)+"\n";
+            }
+            compressingFile.close();
+        }
+        i++;
+        j=0;
+        
+    }
+    //std::cout<<"output: "<<output<<endl;
+}
+
+
+/**
+ * @brief Compression function
+ * 
+ */
+
+
+void compression(){
+    vector<string> data; //All 32bit strings
+    vector<string> unOrderedList;//Original list(Strings which has more than one frequenceies)
+    vector<string> orderedList;//updated list(dictionaries)-according to the requirements
+    map<string, int> dataMap;
+    getData(data); //Get all text data value into a list
+    createOrderedList(data,unOrderedList,orderedList,dataMap); //Definning the Dictionary value and its order 
+    string output1;
+    encoding(orderedList, data, output1);
+    
+}
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////  DECOMPRESSION FUNCTIONS   /////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief 
+ * input: str => 000 :  2bit
+ *               001 : 12bit
+ *               010 :  8bit
+ *               011 :  8bit
+ *               100 : 13bit
+ *               101 :  3bit
+ *               110 : 32bit
+ *               xxx : No reservation     
+ * 
+ * function: Returning the reserved number of bits
+ * 
+ */
+int numberOfBits(string str){
+
+    if(str=="000"){
+        return 2;
+    }
+    else if(str=="001"){
+        return 12;
+    }
+    else if(str=="010"||str=="011"){
+        return 8;
+    }
+    else if(str=="100"){
+        return 13;
+    }
+    else if(str=="101"){
+        return 3;
+    }
+    else if(str=="110"){
+        return 32;
+    }
+    else{       //111,11x,1xx,xxx option 
+        return 0;
+    }
+    
+}
+
+/**
+ * @brief 
+ * input: x      
+ * 
+ * function: Returning the string type of the character
+ * 
+ */
+
+string getString(char x)
+{
+    string s(1, x);
+ 
+    return s;  
+}
+
+/**
+ * @brief 
+ * input: encodedDataList => empty list(filtered data encode data values will be added)
+ *        encodedDictList => empty list(dictionary values will be added) 
+ * 
+ * function: Giving encoded data values and dictionary values seperately 
+ * 
+ */
+
+
+void gettingLists(vector<string> &encodedDataList,vector<string> &encodedDictList){
+    fstream CompressedFile;
+    CompressedFile.open("compressed.txt",ios::in);
+
+    int numberOfBitSpace;
+    char character;
+    string formatIndex;
+    string otherChar;
+    string line;
+
+    while(true){
+        formatIndex ="";
+        for(int i = 0; i<3; i++){
+            CompressedFile.get(character);
+            if(character=='\n'){
+                CompressedFile.get(character);
+            }
+            formatIndex += getString(character); 
+        }
+        
+        numberOfBitSpace = numberOfBits(formatIndex);
+        //check last character of the formatIndex => 11x,1xx,xxx
+        if(character=='x'){
+            getline(CompressedFile, line);
+            break;
+        }
+
+        if(numberOfBitSpace==0){
+            getline(CompressedFile, line);
+            getline(CompressedFile, line);
+            break;
+        }
+
+        otherChar = "";
+        for(int j=0; j<numberOfBitSpace; j++){
+            CompressedFile.get(character);
+            if(character=='\n'){
+                CompressedFile.get(character);
+            }
+            otherChar += getString(character); 
+
+        }
+        encodedDataList.push_back(formatIndex + otherChar);
+
+    }
+    while(getline(CompressedFile, line)){
+            encodedDictList.push_back(line);
+        }
+    CompressedFile.close(); 
+}
+
+/**
+ * @brief 
+ * input: dictString    => Dictionary string which is used to apply mask
+ *        locationIndex => Mask applying location index
+ *        number        => bit mask size (1,2,4)
+ *        mask          => ("1","11","xxxx")
+ * 
+ * function: Returning the mask applied output string 
+ * 
+ */
+
+string maskOff(string dictString,int locationIndex,int number,string mask){
+    string str= "";
+    for(int i=0;i<dictString.length();i++){
+        if((i>=locationIndex)&&(i<locationIndex+number)){
+            int num = i-locationIndex;
+            if(dictString[i]==mask[num]){
+                str += "0";
+            }
+            else{
+                str += "1";
+            }
+        }
+        else{
+            str += getString(dictString[i]);
+        }
+        
+    }
+    return str; 
+}
+
+/**
+ * @brief 
+ * input: encodedDataList   => Encoded data values included list
+ *        encodedDictaList  => Encoded dictionary values included list
+ * 
+ * function: Decompressing and saving the data in "dout.txt" file. 
+ * 
+ */
+
+void decoding(vector<string> encodedDataList,vector<string> encodedDictaList){
+    string previous ="";
+    ofstream decompressedFile;
+    decompressedFile.open ("dout.txt");
+
+    for(int i = 0; i<encodedDataList.size(); i++){
+
+        string dataValue = encodedDataList.at(i);
+        string formatIndex = getString(dataValue[0]) + getString(dataValue[1]) + getString(dataValue[2]);
+        //cout<<"i = "<<i<<"====="<<formatIndex<<"======="<<dataValue<<endl;
+
+        //-------------------- |000|XX|(RLE decoding)--------------------------//
+        if(formatIndex == "000"){
+            string bits = getString(dataValue[3])+getString(dataValue[4]);
+            int freq = stoi(bits, 0, 2);
+            for(int j = 0; j < freq + 1; j++){
+                //cout<<previous<<endl;
+                if(j==freq){
+                    decompressedFile<<previous; //preventing adding new line at last
+                }
+                else{
+                    decompressedFile<<previous+"\n";
+                }
+                
+            }
+        }
+        //-------------------- |001|XXXXX|XXXX|XXX|(4bit mask)--------------------------//
+        else if(formatIndex == "001"){
+            string location  = "";
+            string bitmask   = "";
+            string dictIndex = "";
+
+            for(int j=0;j<5;j++){
+                location += getString(dataValue[3+j]);
+                if(j<4){
+                    bitmask += getString(dataValue[8+j]);
+                }
+                if(j<3){
+                    dictIndex += getString(dataValue[12+j]);
+                }
+            }
+
+            int intLocation  = stoi(location, 0, 2);
+            int intdictIndex = stoi(dictIndex, 0, 2);
+            string output = maskOff(encodedDictaList.at(intdictIndex),intLocation,4,bitmask);
+            previous = output;
+            //cout<<output<<endl;
+            decompressedFile<<output;
+
+        }
+        //--------------------- |010|XXXXX|XXX|(one bit mis)--------------------------//
+        else if(formatIndex == "010"){
+            string location  = "";
+            string dictIndex = "";
+
+            for(int j=0;j<5;j++){
+                location += getString(dataValue[3+j]);
+                if(j<3){
+                    dictIndex += getString(dataValue[8+j]);
+                }
+            }
+
+            int intLocation  = stoi(location, 0, 2);
+            int intdictIndex = stoi(dictIndex, 0, 2);
+            string output = maskOff(encodedDictaList.at(intdictIndex),intLocation,1,"1");
+            previous = output;
+            //cout<<output<<endl;
+            decompressedFile<<output;
+
+        }
+        //---------------------- |011|XXXXX|XXX|(two consecutive bit mis)--------------------------//
+        else if(formatIndex == "011"){
+            string location  = "";
+            string dictIndex = "";
+
+            for(int j=0;j<5;j++){
+                location += getString(dataValue[3+j]);
+                if(j<3){
+                    dictIndex += getString(dataValue[8+j]);
+                }
+            }
+
+            int intLocation  = stoi(location, 0, 2);
+            int intdictIndex = stoi(dictIndex, 0, 2);
+            string output = maskOff(encodedDictaList.at(intdictIndex),intLocation,2,"11");
+            previous = output;
+            //cout<<output<<endl;
+            decompressedFile<<output;
+
+        }
+
+        //----------------------- |000|XXXXX|XXXXX|XXX|(Two bit mis)--------------------------//
+        else if(formatIndex == "100"){
+            string location1  = "";
+            string location2  = "";
+            string dictIndex = "";
+
+            for(int j=0;j<5;j++){
+                location1 += getString(dataValue[3+j]);
+                location2 += getString(dataValue[8+j]);
+                if(j<3){
+                    dictIndex += getString(dataValue[13+j]);
+                }
+            }
+            
+            int intLocation1  = stoi(location1, 0, 2);
+            int intLocation2  = stoi(location2, 0, 2);
+            int intdictIndex = stoi(dictIndex, 0, 2);
+            string output = maskOff(encodedDictaList.at(intdictIndex),intLocation1,1,"1");
+            output = maskOff(output,intLocation2,1,"1"); //appying maskoff for second time for obtaining the second mis
+            previous = output;
+            //cout<<output<<endl;
+            decompressedFile<<output;
+
+        }
+
+        //------------------------- |000|XXX|(Direct match)--------------------------//
+        else if(formatIndex=="101"){
+
+            string dictIndex = "";
+            for(int j=0;j<3;j++){
+                dictIndex += getString(dataValue[3+j]);
+            }
+            int intdictIndex = stoi(dictIndex, 0, 2);
+            //cout<<encodedDictaList.at(intdictIndex)<<endl;
+            decompressedFile<<encodedDictaList.at(intdictIndex);
+            previous = encodedDictaList.at(intdictIndex);
+        }
+
+        //-------------------------------- Original 32 bit value-------------------------------//
+        else if(formatIndex== "110"){
+            string output = "";
+            for(int j =3;j<dataValue.length();j++){
+                output += dataValue[j];
+            }
+            //cout<<output<<endl;
+            decompressedFile<<output;
+            previous = output;
+        }
+
+        //Adding new lines but preventing adding new line at the end
+        if(i!=encodedDataList.size()-1){
+            decompressedFile<<"\n";
+        }
+
+    }
+    decompressedFile.close();
+}
+
+/**
+ * @brief Decompression
+ * 
+ *
+ */
+
+void decompression(){
+    vector<string> dataList;
+    vector<string> dictList;
+    gettingLists(dataList,dictList);
+    decoding(dataList,dictList);
+}
+
+
+int main(int argc, char *argv[]){
+
+    string num = argv[1];
+    if(num =="1"){
+        compression();
+    }
+    else if(num == "2"){
+        decompression();
+    }
+
+    return 0;
+}
+
+
+
+//----------------------------------- TESTING ----------------------------------------//
+    /**
+     * @brief 
+     * String Compare function Testing
+     *
+     * /
+    
+    /*
+    int format = 0;
+    int start = 0;
+    int end = 0;
+    string mask = "";
+    string st1 = "11101111111111111111111111110111";
+    string st2 = "11101111111111111111111111110010";
+    stringCompare(st1,st2,format,start,end,mask);
+    cout<<"format: "<<format<<" start: "<<start<<" end: "<<end<<" mask: "<<mask<<endl;
+    */
+
+//---------------------------------------------------------------------------------------//
+    /**
+     * @brief 
+     * Encoding function Testing
+     * 
+     */
+
+   /*
+    vector<string> vect1;
+    vector<string> vect2;
+    string output1;
+    
+    vect1.push_back("11101111111111111111111111110010");
+    vect1.push_back("11101111111111111111111111110010");
+    vect1.push_back("11101111111111111111111111110010");
+    vect1.push_back("11101111111111111111111111110111");
+    vect1.push_back("11101111111111111111111111110010");
+    vect1.push_back("11101111111111111111111111110010");
+    vect1.push_back("11101111111111111111111111110111");
+    vect1.push_back("11101111111111111111111111110111");
+    vect1.push_back("11101111111111111111111111110111");
+    vect1.push_back("11101111111111111111111111110111");
+    vect1.push_back("11101111111111111111111111110111");
+    vect2.push_back("11101111111111111111111111110010");
+    vect2.push_back("11101111111111111111111111110111");
+    encoding(vect2, vect1, output1);
+    */
+
+//---------------------------------------------------------------------------------------//
